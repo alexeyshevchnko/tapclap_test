@@ -18,6 +18,23 @@ export class BoardService {
                 this.model.setTile(x, y, this.factory.create(x, y, false)); 
             }
         }
+       /*
+        const centerRow = Math.floor(this.model.rows / 2);
+        const centerCol = Math.floor(this.model.cols / 2);
+
+        for (let y = 0; y < this.model.rows; y++) {
+            for (let x = 0; x < this.model.cols; x++) {
+                if (y === centerRow && (x === centerCol - 1 || x === centerCol || x === centerCol + 1)) {
+                    this.model.setTile(x, y, this.factory.create(x, y, true, "bomb"));
+                }else if(((y === centerRow +1)  || (y === centerRow +2) ||(y === centerRow +3)) && x === centerCol + 1){
+                    this.model.setTile(x, y, this.factory.create(x, y, true, "bomb"));
+                } else if (y === centerRow && x === this.model.cols-1) {
+                    this.model.setTile(x, y, this.factory.create(x, y, true, "roketH")); 
+                } else {
+                    this.model.setTile(x, y, this.factory.create(x, y, false, "red")); 
+                }
+            }
+        }*/
     }
 
     removeTiles(tiles: TileModel[]): void {

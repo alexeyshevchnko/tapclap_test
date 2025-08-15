@@ -6,7 +6,8 @@ import { delay } from '../../Infrastructure/Utils/AsyncUtils';
 import BoardView from '../Views/BoardView';
 
 export class TileAnimator {
-    private readonly cellTime:number = 2.2;
+    public readonly cellTime:number = .2;
+    public readonly addRoketTime:number = 0.05;
     private boardModel: BoardModel;
     private boardView: BoardView;
     private boardService:BoardService;
@@ -130,7 +131,7 @@ export class TileAnimator {
       return; 
     }
 
-    tile.isRemoved = true;
+    //tile.isRemoved = true;
     const node = this.boardView.getTileNode(tile.x, tile.y);
 
     if (!node || !node.isValid) {  
@@ -263,7 +264,7 @@ private  runTweenAnimation(node: cc.Node): Promise<void> {
 
     const animations: Promise<void>[] = [];
     
-
+    const time =this.cellTime+this.addRoketTime;
     if (direction === 'vertical') {
         const lastYTop = this.boardModel.rows - 1; // верхний ряд
         const lastYBottom = 0; // нижний ряд
@@ -275,7 +276,7 @@ private  runTweenAnimation(node: cc.Node): Promise<void> {
             const endPos = this.boardView.getTilePosition(startTile.x, lastYTop);
             animations.push(new Promise<void>(resolve => {
                 cc.tween(upNode)
-                    .to(distanceCells * this.cellTime, { position: endPos })
+                    .to(distanceCells * time, { position: endPos })
                     .call(() => { upNode.destroy(); resolve(); })
                     .start();
             }));
@@ -288,7 +289,7 @@ private  runTweenAnimation(node: cc.Node): Promise<void> {
             const endPos = this.boardView.getTilePosition(startTile.x, lastYBottom);
             animations.push(new Promise<void>(resolve => {
                 cc.tween(downNode)
-                    .to(distanceCells * this.cellTime, { position: endPos })
+                    .to(distanceCells * time, { position: endPos })
                     .call(() => { downNode.destroy(); resolve(); })
                     .start();
             }));
@@ -304,7 +305,7 @@ private  runTweenAnimation(node: cc.Node): Promise<void> {
             const endPos = this.boardView.getTilePosition(lastXRight, startTile.y);
             animations.push(new Promise<void>(resolve => {
                 cc.tween(rightNode)
-                    .to(distanceCells * this.cellTime, { position: endPos })
+                    .to(distanceCells * time, { position: endPos })
                     .call(() => { rightNode.destroy(); resolve(); })
                     .start();
             }));
@@ -317,7 +318,7 @@ private  runTweenAnimation(node: cc.Node): Promise<void> {
             const endPos = this.boardView.getTilePosition(lastXLeft, startTile.y);
             animations.push(new Promise<void>(resolve => {
                 cc.tween(leftNode)
-                    .to(distanceCells * this.cellTime, { position: endPos })
+                    .to(distanceCells * time, { position: endPos })
                     .call(() => { leftNode.destroy(); resolve(); })
                     .start();
             }));
@@ -333,10 +334,10 @@ private  runTweenAnimation(node: cc.Node): Promise<void> {
         const fireNode = cc.instantiate(firePrefab);
         fireNode.position = startPos;
         fireNode.parent = this.boardView.node;
-        fireNode.zIndex = 9999;
+        fireNode.zIndex = 9994;
  
         cc.tween(fireNode)
-            .to( this.cellTime, { opacity: 0 })  
+            .to( this.cellTime*2, { opacity: 0 })  
             .call(() => {
                 fireNode.destroy(); 
             })

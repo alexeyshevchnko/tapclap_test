@@ -70,65 +70,74 @@ export class NormalBehavior extends BaseTileBehavior {
 
 export class BombBehavior extends ChainReactionBehavior {
 
-async execute(tileStart: TileModel): Promise<void> {
-  if(tileStart.isRemoved) return;
-        let currentLayer: TileModel[] = [tileStart];
-        const removed = new Set<TileModel>();
+  async execute(tileStart: TileModel): Promise<void> {
+    if(tileStart.isRemoved) return;   
+    await this.playAnimation(tileStart);  
+  }
 
-        while (currentLayer.length > 0) {
-            const nextLayer: TileModel[] = [];
-            const bombsToAnimate: TileModel[] = [];
-            const rocketsAndOthers: Promise<void>[] = [];
+  async playAnimation(tileStart: TileModel): Promise<void> { 
+    await this.processBombRemoval(tileStart); 
+  }
 
-            for (const current of currentLayer) {
-                if (removed.has(current)) continue;
-                removed.add(current);
+  private async processBombRemoval(tileStart: TileModel): Promise<void> {
+    let currentLayer: TileModel[] = [tileStart];
+    const visited = new Set<TileModel>();
 
-                if (current.id === "bomb") {
-                    const affected = current.behavior.getAffectedTiles(current);
-                    for (const t of affected) {
-                       // if (!t.isRemoved) this.animator.spawnFireAtTile(t);
+    while (currentLayer.length > 0) {
+      const nextLayer: TileModel[] = [];
+      const bombsToAnimate: TileModel[] = [];
+      const rocketsAndOthers: TileModel[] = [];
 
-                        if (t.isRemoved || removed.has(t) || nextLayer.includes(t)) continue;
-                        if (t.behavior instanceof ChainReactionBehavior) {
-                            nextLayer.push(t);
-                        }
-                    }
-                }
+      for (const current of currentLayer) {
+        if (visited.has(current)) continue;
+        visited.add(current);
 
-                if (current.behavior instanceof ChainReactionBehavior) {
-                  console.log("1 add "+ current.id+"  " +current.isRemoved);
-                    bombsToAnimate.push(current);
-                } else {
-                  console.log("2 add "+ current.id+"  " +current.isRemoved);
-                    rocketsAndOthers.push(current.behavior.execute(current));
-                }
+        if (current.behavior instanceof BombBehavior) {
+          const affected = current.behavior.getAffectedTiles(current); 
+
+          for (const t of affected) {
+            if (t === current) continue;
+            if (t.isRemoved || visited.has(t) || nextLayer.includes(t)) continue;
+            if (t.behavior instanceof ChainReactionBehavior) {
+              nextLayer.push(t);
             }
-
-            // Сначала выполняем ракеты и прочие сразу
-            await Promise.all(rocketsAndOthers); 
-            // Теперь все бомбы одного слоя одновременно
-            await Promise.all(
-                bombsToAnimate.map(async (b) => {
-                    await b.behavior.playAnimation(b);
-                })
-            );
-
-            // Задержка между слоями (для цепной реакции)
-            if (nextLayer.length > 0) {
-                await delay(100);
-            }
-
-            currentLayer = nextLayer;
+          }
         }
 
-         //const affectedTiles = this.getAffectedTiles(tileStart);
-         //this.board.removeTiles(affectedTiles);
+        if (current.behavior instanceof BombBehavior) {
+          bombsToAnimate.push(current);
+        } else {
+          rocketsAndOthers.push(current);
+        }
+      }
+ 
+      await Promise.all([
+        ...bombsToAnimate.map(b => (b.behavior as BombBehavior).explodeWithoutKillingChains(b)),
+        ...rocketsAndOthers.map(t => t.behavior.execute(t)),
+      ]);
+
+      if (nextLayer.length > 0) {
+        await delay(50);  
+      }
+
+      currentLayer = nextLayer;
+    }
+  }
+
+  private async explodeWithoutKillingChains(tileStart: TileModel): Promise<void> {
+    const affected = this.getAffectedTiles(tileStart);
+ 
+    const toRemove = affected.filter(t =>
+      !(t.behavior instanceof ChainReactionBehavior) || t === tileStart
+    );
+
+    for (const t of affected) {
+      this.animator.spawnFireAtTile(t);  
     }
 
-    private async processBombRemoval(startTile: TileModel): Promise<void> { 
-
-    }
+    await this.animator.animateGroupRemoval(tileStart, toRemove);
+    this.board.removeTiles(toRemove);
+  } 
 
   getAffectedTiles(tileStart: TileModel): TileModel[] {
     const neighbors: TileModel[] = [];
@@ -153,15 +162,7 @@ async execute(tileStart: TileModel): Promise<void> {
     return neighbors;
   }
 
-  async playAnimation(tileStart: TileModel): Promise<void> { 
-    const affectedTiles = this.getAffectedTiles(tileStart);
-    for (const t of affectedTiles) {
-      //if (!t.isRemoved) 
-        this.animator.spawnFireAtTile(t);
-    }
-    await this.animator.animateGroupRemoval(tileStart,affectedTiles); 
-    this.board.removeTiles(affectedTiles);
-  }
+
 }
 
 export abstract class BaseRoketBehavior extends ChainReactionBehavior {
@@ -183,61 +184,76 @@ export abstract class BaseRoketBehavior extends ChainReactionBehavior {
   }
 
   private async processRocketRemoval(
-      startTile: TileModel,
-      affectedTiles: TileModel[]
-  ): Promise<void> { 
-console.log("processRocketRemoval");
-    const centerIndex = affectedTiles.findIndex(t => t === startTile);
-    let left = centerIndex - 1;
-    let right = centerIndex + 1; 
+  startTile: TileModel,
+  affectedTiles: TileModel[]
+): Promise<void> {
+  const centerIndex = affectedTiles.findIndex(t => t === startTile);
+  let left = centerIndex - 1;
+  let right = centerIndex + 1;
 
-    await this.animator.animateRemoval(startTile);
+  const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-    const chainPromises: Promise<void>[] = [];
+  // Удаляем саму ракету (центр)
+  await this.animator.animateRemoval(startTile);
 
+  const allStepPromises: Promise<void>[] = [];
+
+  const stepWave = async () => {
     while (left >= 0 || right < affectedTiles.length) {
-      const promises: Promise<void>[] = [];
+      const removalsThisStep: Promise<void>[] = [];
+      const chainsThisStep: TileModel[] = [];
 
       if (left >= 0) {
-        this.handleTile(affectedTiles[left], startTile, promises, chainPromises);
+        this.collectStep(affectedTiles[left], startTile, removalsThisStep, chainsThisStep);
         left--;
       }
 
       if (right < affectedTiles.length) {
-        this.handleTile(affectedTiles[right], startTile, promises, chainPromises);
+        this.collectStep(affectedTiles[right], startTile, removalsThisStep, chainsThisStep);
         right++;
       }
 
-      await Promise.all(promises);
-    }
+      // Промисы для chain-тайлов этого шага
+      const chainsPromises: Promise<void>[] = chainsThisStep.map(t => t.behavior.execute(t));
 
-    if (chainPromises.length > 0) {
-      await Promise.all(chainPromises).catch(e => console.error("error", e));
+      // Добавляем все промисы этого шага в общий массив
+      allStepPromises.push(...removalsThisStep, ...chainsPromises);
+
+      // Задержка между «волнами» для визуала
+      await delay((this.animator.cellTime + this.animator.addRoketTime) * 1000);
     }
+  };
+
+  await stepWave();
+
+  // Ждём завершения всех промисов шагов (тайлы + цепочки)
+  await Promise.all(allStepPromises);
+}
+
+
+
+/** Вместо старого handleTile — коллекционируем по шагу */
+private collectStep(
+  tile: TileModel,
+  startTile: TileModel,
+  removals: Promise<void>[],
+  chains: TileModel[]
+) {
+  if (!tile) return;
+
+  if (this.isChainReaction(startTile, tile)) {
+    // НЕ запускаем сразу, а копим на текущий шаг
+    chains.push(tile);
+  } else {
+    // Обычный тайл — просто удаляем
+    removals.push(this.animator.animateRemoval(tile));
   }
+}
 
-  private handleTile(
-      tile: TileModel,
-      startTile: TileModel,
-      promises: Promise<void>[],
-      chainPromises: Promise<void>[]
-  ) {
-    if (this.isChainReaction(startTile, tile)) {
-        chainPromises.push(
-          (async () => {
-              
-            await tile.behavior.execute(tile);
-            await this.animator.animateRemoval(tile);
-          })()
-        );
-    } else {
-      promises.push(this.animator.animateRemoval(tile));
-    }
-  }
 
-  private isChainReaction(tileClicked: TileModel, tile: TileModel): boolean {
+  private isChainReaction(startTile: TileModel, tile: TileModel): boolean {
    // if (!tile || !tile.behavior) return false; 
-    return /*!tile.isRemoved &&*/ tileClicked.behavior.constructor !== tile.behavior.constructor &&
+    return /*!tile.isRemoved &&*/ startTile.behavior.constructor !== tile.behavior.constructor &&
         tile.behavior instanceof ChainReactionBehavior 
       
   }
@@ -250,6 +266,7 @@ export class RoketVBehavior extends BaseRoketBehavior {
     if (tileStart.isRemoved) return;
 
     if(this.lineLocks.get(tileStart.x)){
+      await this.animator.animateRemoval(tileStart);
       return;
     }
 
@@ -260,7 +277,7 @@ export class RoketVBehavior extends BaseRoketBehavior {
 
   getAffectedTiles(tileStart: TileModel): TileModel[] {
     const tiles: TileModel[] = [];
-    for (let y = 0; y < this.board.cols(); y++) {
+    for (let y = 0; y < this.board.rows(); y++) {
       const tile = this.board.getTile(tileStart.x, y);
       if (tile) tiles.push(tile);
     }
@@ -270,19 +287,16 @@ export class RoketVBehavior extends BaseRoketBehavior {
 
 export class RoketHBehavior extends BaseRoketBehavior {
   private lineLocks = new Map<number, boolean>();
-  async execute(tileStart: TileModel): Promise<void> {
-    console.log("start");
+  async execute(tileStart: TileModel): Promise<void> { 
     if(tileStart.isRemoved) return;
 
-    if(this.lineLocks.get(tileStart.y)){
-      console.log("fail");
+    if(this.lineLocks.get(tileStart.y)){ 
+      await this.animator.animateRemoval(tileStart);
       return;
     }
 
-    this.lineLocks.set(tileStart.y, true);
-    console.log("lock");
-    await this.playAnimation(tileStart);
-    console.log("unlock");
+    this.lineLocks.set(tileStart.y, true); 
+    await this.playAnimation(tileStart); 
     this.lineLocks.set(tileStart.y, false);
   }
 

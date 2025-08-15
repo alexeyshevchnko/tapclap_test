@@ -24,12 +24,12 @@ export default class ScriptableTileConfig extends cc.Component {
     onLoad(){
         const configs: Record<string, TileConfig> = {
           red: { id: 'red', spriteName: 'red', behavior: new NormalBehavior() },
-          blue: { id: 'blue', spriteName: 'blue', behavior: new NormalBehavior()},
-       //   green: { id: 'green', spriteName: 'green', behavior:  new NormalBehavior()},
-         // purpure: { id: 'purpure', spriteName: 'purpure', behavior:  new NormalBehavior()},
-        //  yellow: { id: 'yellow', spriteName: 'yellow', behavior:  new NormalBehavior()},
+         blue: { id: 'blue', spriteName: 'blue', behavior: new NormalBehavior()},
+          green: { id: 'green', spriteName: 'green', behavior:  new NormalBehavior()},
+          purpure: { id: 'purpure', spriteName: 'purpure', behavior:  new NormalBehavior()},
+          yellow: { id: 'yellow', spriteName: 'yellow', behavior:  new NormalBehavior()},
          bomb: { id: 'bomb', spriteName: 'bomb', behavior: new BombBehavior() },
-       //  roketV: { id: 'roketV', spriteName: 'roketV', behavior: new RoketVBehavior() },
+         roketV: { id: 'roketV', spriteName: 'roketV', behavior: new RoketVBehavior() },
           roketH: { id: 'roketH', spriteName: 'roketH', behavior: new RoketHBehavior() }
         };
 
